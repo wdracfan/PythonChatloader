@@ -44,7 +44,7 @@ public class ChatLoaderController : ControllerBase
 
         try
         {
-            await RequestProcessing.ProcessRequest(UrlStart + $"add-channel/@{handle}", _conn);
+            await RequestProcessing.ProcessPostRequest(UrlStart + $"add-channel/@{handle}", _conn);
         }
         catch (Exception e)
         {
@@ -55,7 +55,7 @@ public class ChatLoaderController : ControllerBase
     }
 
     /// <summary>
-    /// Get message
+    /// Get messages by id
     /// </summary>
     /// <param name="channelId">channel id</param>
     /// <returns>smth</returns>
@@ -70,7 +70,7 @@ public class ChatLoaderController : ControllerBase
         
         try
         {
-            await RequestProcessing.ProcessRequest(UrlStart + $"get-messages/{channelId}", _conn);
+            await RequestProcessing.ProcessPostRequest(UrlStart + $"get-messages/{channelId}", _conn);
         }
         catch (Exception e)
         {
@@ -79,37 +79,41 @@ public class ChatLoaderController : ControllerBase
 
         return Results.Ok("Your request has been accepted.");
     }
-
-    //not required at the moment
-    /*     
+    
+    /// <summary>
+    /// Download messages by dates
+    /// </summary>
+    /// <param name="channelId">channel id</param>
+    /// <param name="startDate">start date</param>
+    /// <param name="endDate">end date</param>
+    /// <returns></returns>
     [HttpPost]
-    [Route("get-messages-date")]
-    public async Task<IResult> DownloadMessageByDate(
-        [FromQuery] string? channelHandle,
-        [FromQuery] DateSpan? dateSpan,
-        [FromQuery] DateTime date)
+    [Route("download-messages")]
+    public async Task<IResult> DownloadMessagesByDate(
+        [FromQuery] string? channelId,
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate)
     {
-        var startDate = dateSpan?.StartDate;
-        var endDate = dateSpan?.EndDate;
-        
-        if (channelHandle is null)
+        if (channelId is null)
         {
-            return Results.BadRequest("Handle cannot be empty! Your request has not been accepted.");
+            return Results.BadRequest("Channel ID cannot be empty! Your request has not been accepted.");
         }
 
-        if (startDate is null || startDate.Year is null || startDate.Month is null || startDate.Day is null)
+        if (startDate is null || endDate is null)
         {
-            return Results.BadRequest("Wrong start date format! Your request has not been accepted.");
+            return Results.BadRequest("Dates cannot be empty! Your request has not been accepted.");
         }
         
-        if (endDate is null || endDate.Year is null || endDate.Month is null || endDate.Day is null)
+        if (startDate > endDate)
         {
-            return Results.BadRequest("Wrong end date format! Your request has not been accepted.");
+            return Results.BadRequest("End date must be greater than start date. Your request has not been accepted.");
         }
         
         try
         {
-            await RequestProcessing.ProcessRequest(Request.Path + Request.QueryString, _conn);
+            await RequestProcessing.ProcessPostRequest(
+                UrlStart + $"download-messages/{channelId}/{startDate:dd.MM.yyyy hh:mm}/{endDate:dd.MM.yyyy hh:mm}",
+                _conn);
         }
         catch (Exception e)
         {
@@ -118,8 +122,7 @@ public class ChatLoaderController : ControllerBase
         
         return Results.Ok("Your request has been accepted.");
     }
-    */
-    
+
     /// <summary>
     /// Show message
     /// </summary>
@@ -136,7 +139,38 @@ public class ChatLoaderController : ControllerBase
         
         try
         {
-            var reqId = await RequestProcessing.SendShowRequest(UrlStart + $"show-messages/{channelId}", _conn);
+            var reqId = await RequestProcessing.SendGetRequest(UrlStart + $"show-messages/{channelId}", _conn);
+
+            //for the bot to update the response
+            await Task.Delay(_delayMilliseconds);
+
+            var response = await RequestProcessing.GetAnswer(_conn, reqId);
+            if (response is not null)
+            {
+                return Results.Ok(response);
+            }
+            else
+            {
+                return Results.Ok("The response is not ready yet. Please try later.");
+            }
+        }
+        catch (Exception e)
+        {
+            return Results.BadRequest($"Unexpected error occurred: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Show all channels
+    /// </summary>
+    /// <returns></returns>
+    [HttpGet]
+    [Route("get-all-channels")]
+    public async Task<IResult> GetAllChannels()
+    {
+        try
+        {
+            var reqId = await RequestProcessing.SendGetRequest(UrlStart + $"get-all-channels", _conn);
 
             //for the bot to update the response
             await Task.Delay(_delayMilliseconds);
